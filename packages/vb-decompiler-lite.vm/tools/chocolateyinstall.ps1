@@ -3,7 +3,7 @@ Import-Module vm.common -Force -DisableNameChecking
 
 try{
 
-    $toolName = 'VB Decompiler Lite'
+    $toolName = 'VB Decompiler'
     $category = 'Visual Basic'
 
     $zipUrl = 'https://www.vb-decompiler.org/files/vb_decompiler_lite.zip'
