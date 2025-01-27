@@ -70,11 +70,18 @@ function VM-Remove-PreviousZipPackage {
     }
 }
 
+
 function VM-Write-Log {
+<#
+.SYNOPSIS
+  Log message to file and console.
+.DESCRIPTION
+  Log message to log file with extra useful information and to console with a color depending on the level.
+#>
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$true, Position=0)]
-        [ValidateSet("INFO","WARN","ERROR","FATAL","DEBUG")]
+        [ValidateSet("INFO","WARN","ERROR")]
         [String] $level,
         [Parameter(Mandatory=$true, Position=1)]
         [string] $message
@@ -106,11 +113,11 @@ function VM-Write-Log {
 
     # Log message to console
     if (($level -eq "ERROR") -Or ($level -eq "FATAL")) {
-        Write-Host -ForegroundColor Red -BackgroundColor White "$line"
+        Write-Host -ForegroundColor Red -BackgroundColor White "$message"
     } elseif ($level -eq "WARN") {
-        Write-Host -ForegroundColor Yellow "$line"
+        Write-Host -ForegroundColor Yellow "$message"
     } else {
-        Write-Host "$line"
+        Write-Host -ForegroundColor Cyan "$message"
     }
 }
 
@@ -614,6 +621,9 @@ function VM-Uninstall {
 
     # Uninstall binary
     Uninstall-BinFile -Name $toolName
+
+    # Refresh Desktop, needed for example if shortcut is used in FLARE-VM LayoutModification.xml
+    VM-Refresh-Desktop
 }
 
 function VM-Remove-Tool-Shortcut {
@@ -1742,12 +1752,16 @@ function VM-Pip-Install {
     param (
         [string]$libraries # Comma-separated list of libraries to install, example: "flare-capa", "flare-capa,tabulate"
     )
-    # Create output file to log python module installation details
-    $outputFile = VM-New-Install-Log ${Env:VM_COMMON_DIR}
+    try {
+    	# Create output file to log python module installation details
+    	$outputFile = VM-New-Install-Log ${Env:VM_COMMON_DIR}
 
-    ForEach ($library in $libraries.Split(",")) {
-        # Ignore warning with `-W ignore` to avoid warnings like deprecation to fail the installation
-        Invoke-Expression "py -3.10 -W ignore -m pip install $library --disable-pip-version-check 2>&1 >> $outputFile"
+    	ForEach ($library in $libraries.Split(",")) {
+        	# Ignore warning with `-W ignore` to avoid warnings like deprecation to fail the installation
+        	Invoke-Expression "py -3.10 -W ignore -m pip install $library --disable-pip-version-check 2>&1 >> $outputFile"
+    	}
+    } catch {
+        VM-Write-Log-Exception $_
     }
 }
 
@@ -1761,8 +1775,8 @@ function VM-Install-With-Pip {
         [string] $toolName, # Example: magika
         [Parameter(Mandatory=$true)]
         [string] $category,
-        [Parameter(Mandatory=$false)]
-        [string] $version = "", # Version using pip format, example: "==0.5.0"
+        [Parameter(Mandatory=$true)]
+        [string] $version,  # Version using pip format, example: "==0.5.0"
         [Parameter(Mandatory=$false)]
         [string] $arguments = "--help"
     )
