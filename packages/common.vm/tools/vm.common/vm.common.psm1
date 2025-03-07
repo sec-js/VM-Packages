@@ -70,11 +70,18 @@ function VM-Remove-PreviousZipPackage {
     }
 }
 
+
 function VM-Write-Log {
+<#
+.SYNOPSIS
+  Log message to file and console.
+.DESCRIPTION
+  Log message to log file with extra useful information and to console with a color depending on the level.
+#>
     [CmdletBinding()]
     Param(
         [Parameter(Mandatory=$true, Position=0)]
-        [ValidateSet("INFO","WARN","ERROR","FATAL","DEBUG")]
+        [ValidateSet("INFO","WARN","ERROR")]
         [String] $level,
         [Parameter(Mandatory=$true, Position=1)]
         [string] $message
@@ -106,11 +113,11 @@ function VM-Write-Log {
 
     # Log message to console
     if (($level -eq "ERROR") -Or ($level -eq "FATAL")) {
-        Write-Host -ForegroundColor Red -BackgroundColor White "$line"
+        Write-Host -ForegroundColor Red -BackgroundColor White "$message"
     } elseif ($level -eq "WARN") {
-        Write-Host -ForegroundColor Yellow "$line"
+        Write-Host -ForegroundColor Yellow "$message"
     } else {
-        Write-Host "$line"
+        Write-Host -ForegroundColor Cyan "$message"
     }
 }
 
@@ -397,6 +404,8 @@ function VM-Install-From-Zip {
         [Parameter(Mandatory=$false)]
         [string] $executableName, # Executable name, needed if different from "$toolName.exe"
         [Parameter(Mandatory=$false)]
+        [switch] $verifySignature,
+        [Parameter(Mandatory=$false)]
         [switch] $withoutBinFile, # Tool should not be installed as a bin file
         # Examples:
         # $powershellCommand = "Get-Content README.md"
@@ -410,17 +419,31 @@ function VM-Install-From-Zip {
         # Remove files from previous zips for upgrade
         VM-Remove-PreviousZipPackage ${Env:chocolateyPackageFolder}
 
-        # Download and unzip
-        $packageArgs = @{
-            packageName    = ${Env:ChocolateyPackageName}
-            unzipLocation  = $toolDir
-            url            = $zipUrl
-            checksum       = $zipSha256
-            checksumType   = 'sha256'
-            url64bit       = $zipUrl_64
-            checksum64     = $zipSha256_64
+        # We do not check hashes for tools that we use signature verification for
+        if ($verifySignature) {
+            # Download zip
+            $packageArgs      = @{
+                packageName     = $env:ChocolateyPackageName
+                file            = Join-Path ${Env:TEMP} $toolName
+                url             = $zipUrl
+            }
+            $filePath = Get-ChocolateyWebFile @packageArgs
+            # Extract zip
+            Get-ChocolateyUnzip -FileFullPath $filePath -Destination $toolDir
         }
-        Install-ChocolateyZipPackage @packageArgs | Out-Null
+        else {  # Not verifying signature, so check if hash is as expected
+            # Download and unzip
+            $packageArgs = @{
+                packageName    = ${Env:ChocolateyPackageName}
+                unzipLocation  = $toolDir
+                url            = $zipUrl
+                checksum       = $zipSha256
+                checksumType   = 'sha256'
+                url64bit       = $zipUrl_64
+                checksum64     = $zipSha256_64
+            }
+            Install-ChocolateyZipPackage @packageArgs | Out-Null
+        }
         VM-Assert-Path $toolDir
 
         # If $innerFolder is set to $true, after unzipping there should be only one folder
@@ -428,6 +451,21 @@ function VM-Install-From-Zip {
         if ($innerFolder) {
             $dirList = Get-ChildItem $toolDir -Directory
             $toolDir = Join-Path $toolDir $dirList[0].Name -Resolve
+        }
+
+        if ($verifySignature) {
+            # Check signature of all executable files individually
+            Get-ChildItem -Path "$toolDir\*.exe" | ForEach-Object {
+                try {
+                    # Check signature for each file
+                    VM-Assert-Signature $_.FullName
+                } catch {
+                    # Remove the file with invalid signature
+                    Write-Warning "Removing file '$($_.FullName)' due to invalid signature"
+                    Remove-Item $_.FullName -Force -ea 0 | Out-Null
+                    VM-Write-Log-Exception $_
+                }
+            }
         }
 
         if ($powershellCommand) {
@@ -614,6 +652,9 @@ function VM-Uninstall {
 
     # Uninstall binary
     Uninstall-BinFile -Name $toolName
+
+    # Refresh Desktop, needed for example if shortcut is used in FLARE-VM LayoutModification.xml
+    VM-Refresh-Desktop
 }
 
 function VM-Remove-Tool-Shortcut {
@@ -1523,8 +1564,10 @@ public class Shell {
         $SHCNE_ASSOCCHANGED = 0x08000000
         $SHCNF_IDLIST = 0
         [void][Shell]::SHChangeNotify($SHCNE_ASSOCCHANGED, $SHCNF_IDLIST, [IntPtr]::Zero, [IntPtr]::Zero)
-        # Refresh the Taskbar
-        Stop-Process -Name explorer -Force  # This restarts the explorer process so that the new taskbar is displayed.
+        # Restart the explorer process to refresh the taskbar.
+        # Use '-ErrorAction Continue' to avoid failing the package installation if it fails,
+        # for example if there is no desktop session (as in this case explorer.exe is not running)
+        Stop-Process -Name explorer -Force -ErrorAction Continue
     } catch {
         VM-Write-Log-Exception $_
     }
@@ -1742,12 +1785,16 @@ function VM-Pip-Install {
     param (
         [string]$libraries # Comma-separated list of libraries to install, example: "flare-capa", "flare-capa,tabulate"
     )
-    # Create output file to log python module installation details
-    $outputFile = VM-New-Install-Log ${Env:VM_COMMON_DIR}
+    try {
+    	# Create output file to log python module installation details
+    	$outputFile = VM-New-Install-Log ${Env:VM_COMMON_DIR}
 
-    ForEach ($library in $libraries.Split(",")) {
-        # Ignore warning with `-W ignore` to avoid warnings like deprecation to fail the installation
-        Invoke-Expression "py -3.10 -W ignore -m pip install $library --disable-pip-version-check 2>&1 >> $outputFile"
+    	ForEach ($library in $libraries.Split(",")) {
+        	# Ignore warning with `-W ignore` to avoid warnings like deprecation to fail the installation
+        	Invoke-Expression "py -3.10 -W ignore -m pip install $library --disable-pip-version-check 2>&1 >> $outputFile"
+    	}
+    } catch {
+        VM-Write-Log-Exception $_
     }
 }
 
@@ -1761,8 +1808,8 @@ function VM-Install-With-Pip {
         [string] $toolName, # Example: magika
         [Parameter(Mandatory=$true)]
         [string] $category,
-        [Parameter(Mandatory=$false)]
-        [string] $version = "", # Version using pip format, example: "==0.5.0"
+        [Parameter(Mandatory=$true)]
+        [string] $version,  # Version using pip format, example: "==0.5.0"
         [Parameter(Mandatory=$false)]
         [string] $arguments = "--help"
     )
@@ -1867,4 +1914,23 @@ function VM-Unzip-Recursively {
             Write-Host "  [+] UNZIPPED '$file'" -ForegroundColor Green
         }
     }
+}
+# Obtains the chocolatey install script path from a package, for example: C:\ProgramData\chocolatey\lib\capa.vm\tools\chocolateyinstall.ps1
+# Reads the tag with name tags from the nuspec file,
+# Returns the category if the tags exist in the nuspec
+function VM-Get-Category {
+    Param
+    (
+        [Parameter(Mandatory=$true)]
+        [string] $installPath
+
+    )
+    $chocoToolDir = $(Split-Path -parent (Split-Path -parent $installPath))
+    $packageName = ${Env:ChocolateyPackageName}
+    $nuspec = $packageName + ".nuspec"
+    VM-Assert-Path $chocoToolDir
+    $nuspecFilePath = Join-Path $chocoToolDir $nuspec -Resolve
+    $nuspecContent = [xml](Get-Content $nuspecFilePath)
+    $category = $nuspecContent.package.metadata.tags
+    return $category
 }

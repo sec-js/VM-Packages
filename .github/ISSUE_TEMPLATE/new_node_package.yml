@@ -54,7 +54,7 @@ body:
       label: Category
       description: Which category should this tool be installed to?
       options:
-        - Command & Control
+        - Command and Control
         - Credential Access
         - Debuggers
         - Delphi
@@ -66,7 +66,7 @@ body:
         - Forensic
         - Hex Editors
         - InnoSetup
-        - Java & Android
+        - Java and Android
         - Javascript
         - Lateral Movement
         - Memory
@@ -102,6 +102,13 @@ body:
       label: Tool's description
       description: |
         The tool description should be short and not include version specific details or other information that is likely to change in a future version. Example: `Deobfuscator to remove common JS obfuscation techniques.`.
+  - type: input
+    id: arguments
+    attributes:
+      label: Arguments
+      description: |	
+        Command-line arguments to pass to the tool when running it from the `Tools` directory. For example `--help`.
+      value: --help
   - type: input
     id: dependencies
     attributes:

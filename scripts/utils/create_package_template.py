@@ -46,6 +46,7 @@ NUSPEC_TEMPLATE = r"""<?xml version="1.0" encoding="utf-8"?>
     <dependencies>
       <dependency id="common.vm" version="0.0.0.20240509" />
     </dependencies>
+    <tags>{category}</tags>
   </metadata>
 </package>
 """
@@ -61,6 +62,7 @@ NUSPEC_TEMPLATE_NODE = r"""<?xml version="1.0" encoding="utf-8"?>
       <dependency id="common.vm" version="0.0.0.20240514" />
       <dependency id="nodejs.vm" version="0.0.0.20240516" />
     </dependencies>
+    <tags>{category}</tags>
   </metadata>
 </package>
 """
@@ -76,6 +78,7 @@ NUSPEC_TEMPLATE_PIP = r"""<?xml version="1.0" encoding="utf-8"?>
       <dependency id="common.vm" version="0.0.0.20241209" />
       <dependency id="python3.vm" />
     </dependencies>
+    <tags>{category}</tags>
   </metadata>
 </package>
 """
@@ -95,6 +98,7 @@ NUSPEC_TEMPLATE_METAPACKAGE = r"""<?xml version="1.0" encoding="utf-8"?>
       <dependency id="common.vm" />
       <dependency id="{dependency}" version="[{dependency_version}]" />
     </dependencies>
+    <tags>{category}</tags>
   </metadata>
 </package>
 """
@@ -103,12 +107,13 @@ ZIP_EXE_TEMPLATE = r"""$ErrorActionPreference = 'Stop'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = '{tool_name}'
-$category = '{category}'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
 
 $zipUrl = '{target_url}'
 $zipSha256 = '{target_hash}'
+$arguments = '{arguments}'
 
-VM-Install-From-Zip $toolName $category $zipUrl -zipSha256 $zipSha256 -consoleApp ${console_app} -innerFolder ${inner_folder}
+VM-Install-From-Zip $toolName $category $zipUrl -zipSha256 $zipSha256 -consoleApp ${console_app} -innerFolder ${inner_folder} -arguments $arguments
 """
 
 """
@@ -119,9 +124,10 @@ NODE_TEMPLATE = r"""$ErrorActionPreference = 'Stop'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = '{tool_name}'
-$category = '{category}'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
+$arguments = '{arguments}'
 
-VM-Install-Node-Tool -toolName $toolName -category $category -arguments "--help"
+VM-Install-Node-Tool -toolName $toolName -category $category -arguments $arguments
 """
 
 """
@@ -133,7 +139,7 @@ Import-Module vm.common -Force -DisableNameChecking
 
 try {{
   $toolName = '{tool_name}'
-  $category = '{category}'
+  $category = VM-Get-Category($MyInvocation.MyCommand.Definition)
   $shimPath = '{shim_path}'
 
   $executablePath = Join-Path ${{Env:ChocolateyInstall}} $shimPath -Resolve
@@ -151,12 +157,13 @@ SINGLE_EXE_TEMPLATE = r"""$ErrorActionPreference = 'Stop'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = '{tool_name}'
-$category = '{category}'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
 
 $exeUrl = '{target_url}'
 $exeSha256 = '{target_hash}'
+$arguments = '{arguments}'
 
-VM-Install-Single-Exe $toolName $category $exeUrl -exeSha256 $exeSha256 -consoleApp ${console_app}
+VM-Install-Single-Exe $toolName $category $exeUrl -exeSha256 $exeSha256 -consoleApp ${console_app} -arguments $arguments
 """
 
 """
@@ -167,7 +174,7 @@ SINGLE_PS1_TEMPLATE = r"""$ErrorActionPreference = 'Stop'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = '{tool_name}'
-$category = '{category}'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
 
 $ps1Url = '{target_url}'
 $ps1Sha256 = '{target_hash}'
@@ -198,10 +205,11 @@ PIP_TEMPLATE = r"""$ErrorActionPreference = 'Stop'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = '{tool_name}'
-$category = '{category}'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
 $version = '=={version}'
+$arguments = '{arguments}'
 
-VM-Install-With-Pip -toolName $toolName -category $category -version $version
+VM-Install-With-Pip -toolName $toolName -category $category -version $version -arguments $arguments
 """
 
 """
@@ -213,7 +221,7 @@ GENERIC_UNINSTALL_TEMPLATE = r"""$ErrorActionPreference = 'Continue'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = '{tool_name}'
-$category = '{category}'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
 
 VM-Uninstall $toolName $category
 """
@@ -226,7 +234,7 @@ METAPACKAGE_UNINSTALL_TEMPLATE = r"""$ErrorActionPreference = 'Continue'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = '{tool_name}'
-$category = '{category}'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
 
 VM-Remove-Tool-Shortcut $toolName $category
 """
@@ -246,7 +254,7 @@ PIP_UNINSTALL_TEMPLATE = r"""$ErrorActionPreference = 'Continue'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = '{tool_name}'
-$category = '{category}'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
 
 VM-Uninstall-With-Pip $toolName $category
 """
@@ -267,6 +275,7 @@ def create_zip_exe_template(packages_path, **kwargs):
         target_hash=kwargs.get("target_hash"),
         console_app=kwargs.get("console_app"),
         inner_folder=kwargs.get("inner_folder"),
+        arguments=kwargs.get("arguments"),
     )
 
 
@@ -281,6 +290,7 @@ def create_node_template(packages_path, **kwargs):
         description=kwargs.get("description"),
         tool_name=kwargs.get("tool_name"),
         category=kwargs.get("category"),
+        arguments=kwargs.get("arguments"),
     )
 
 
@@ -311,6 +321,7 @@ def create_single_exe_template(packages_path, **kwargs):
         description=kwargs.get("description"),
         tool_name=kwargs.get("tool_name"),
         category=kwargs.get("category"),
+        arguments=kwargs.get("arguments"),
         target_url=kwargs.get("target_url"),
         target_hash=kwargs.get("target_hash"),
         console_app=kwargs.get("console_app"),
@@ -358,6 +369,7 @@ def create_pip_template(packages_path, **kwargs):
         description=kwargs.get("description"),
         tool_name=kwargs.get("tool_name"),
         category=kwargs.get("category"),
+        arguments=kwargs.get("arguments"),
     )
 
 def create_template(
@@ -377,6 +389,7 @@ def create_template(
     dependency="",
     console_app="",
     inner_folder="",
+    arguments="",
 ):
     pkg_path = os.path.join(packages_path, f"{pkg_name}.vm")
     try:
@@ -399,6 +412,7 @@ def create_template(
                 description=description,
                 dependency=dependency,
                 dependency_version = version,
+                category = category,
             )
         )
 
@@ -407,7 +421,7 @@ def create_template(
             template.format(
                 tool_name=tool_name,
                 version=version,
-                category=category,
+                arguments=arguments,
                 target_url=target_url,
                 target_hash=target_hash,
                 shim_path=shim_path,
@@ -417,7 +431,7 @@ def create_template(
         )
 
     with open(os.path.join(tools_path, UNINSTALL_TEMPLATE_NAME), "w") as f:
-        f.write(uninstall_template.format(tool_name=tool_name, category=category))
+        f.write(uninstall_template.format(tool_name=tool_name))
 
 
 def get_script_directory():
@@ -470,6 +484,7 @@ TYPES = {
             "description",
             "tool_name",
             "category",
+            "arguments",
         ],
     },
     "SINGLE_EXE": {
@@ -486,6 +501,7 @@ TYPES = {
             "target_url",
             "target_hash",
             "console_app",
+            "arguments",
         ],
     },
     "SINGLE_PS1": {
@@ -529,6 +545,7 @@ TYPES = {
             "description",
             "tool_name",
             "category",
+            "arguments",
         ],
     },
 }
@@ -601,6 +618,7 @@ def main(argv=None):
     parser.add_argument("--shim_path", type=str, default="", help="Metapackage shim path")
     parser.add_argument("--console_app", type=str, default="false", choices=["false", "true"],  help="The tool is a console application, the shortcut should run it with `cmd /K $toolPath --help` to be able to see the output.")
     parser.add_argument("--inner_folder", type=str, default="false", choices=["false", "true"],  help="The ZIP file unzip to a single folder that contains all the tools.")
+    parser.add_argument("--arguments", type=str, required=False, default="", help="Command-line arguments for the execution")
     args = parser.parse_args(args=argv)
 
     if args.type is None:
