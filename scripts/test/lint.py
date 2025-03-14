@@ -20,14 +20,14 @@ Usage:
    $ python lint.py packages/
 """
 
-import os
-import sys
-import logging
-import pathlib
 import argparse
 import datetime
-import subprocess
+import logging
+import os
+import pathlib
 import re
+import subprocess
+import sys
 from typing import Dict
 from xml.dom import minidom
 
@@ -94,6 +94,7 @@ class IncludesRequiredFieldsOnly(Lint):
         "description",
         "authors",
         "dependencies",
+        "tags",
     ]
     recommendation = f"Only include required fields: {', '.join(allowed_fields)}"
 
@@ -271,7 +272,41 @@ class PackageIdNotMatchingFolderOrNuspecName(Lint):
         nuspec = path.parts[-1]
         folder = path.parts[-2]
 
-        return not (pkg_id == folder == nuspec[:-len(".nuspec")])
+        return not (pkg_id == folder == nuspec[: -len(".nuspec")])
+
+
+class UsesInvalidCategory(Lint):
+    # The common.vm, debloat.vm, and installer.vm packages are special as they
+    # assist with the installation and allow to share code between packages.
+    # They do not install any tool and consequently don't have a category.
+    EXCLUSIONS = [
+        "common.vm",
+        "debloat.vm",
+        "installer.vm",
+        # exclude dcode as it fails to install: https://github.com/mandiant/VM-Packages/issues/1176
+        "dcode.vm",
+    ]
+    root_path = os.path.abspath(os.path.join(__file__, "../../.."))
+    categories_txt = os.path.join(root_path, "categories.txt")
+    with open(categories_txt) as file:
+        CATEGORIES = [line.rstrip() for line in file]
+        logger.debug(CATEGORIES)
+
+    name = "uses an invalid category"
+    recommendation = f"use a category from {categories_txt} between <tags> and </tags>"
+
+    def check(self, path):
+        if any([exclusion in str(path) for exclusion in self.EXCLUSIONS]):
+            return False
+
+        # utf-8-sig ignores BOM
+        file_content = open(path, "r", encoding="utf-8-sig").read()
+
+        match = re.search(r"<tags>(?P<category>[\w ]+)<\/tags>", file_content)
+        if not match or match.group("category") not in self.CATEGORIES:
+            return True
+        return False
+
 
 NUSPEC_LINTS = (
     IncludesRequiredFieldsOnly(),
@@ -280,6 +315,7 @@ NUSPEC_LINTS = (
     DependencyContainsUppercaseChar(),
     VersionNotUpdated(),
     PackageIdNotMatchingFolderOrNuspecName(),
+    UsesInvalidCategory(),
 )
 
 
@@ -320,7 +356,7 @@ class FirstLineDoesNotSetErrorAction(Lint):
         return not self.FIRST_LINE == lines[0]
 
 
-class UsesInvalidCategory(Lint):
+class UsesCategoryFromNuspec(Lint):
     # Some packages don't have a category (we don't create a link in the tools directory)
     EXCLUSIONS = [
         ".dbgchild.vm",
@@ -334,7 +370,6 @@ class UsesInvalidCategory(Lint):
         "installer.vm",
         "libraries.python2.vm",
         "libraries.python3.vm",
-        "microsoft-office.vm",
         "notepadpp.plugin.",
         "npcap.vm",
         "openjdk.vm",
@@ -343,16 +378,12 @@ class UsesInvalidCategory(Lint):
         "x64dbgpy.vm",
         "vscode.extension.",
         "chrome.extensions.vm",
+        # exclude dcode as it fails to install: https://github.com/mandiant/VM-Packages/issues/1176
+        "dcode.vm",
     ]
 
-    root_path = os.path.abspath(os.path.join(__file__, "../../.."))
-    categories_txt = os.path.join(root_path, "categories.txt")
-    with open(categories_txt) as file:
-        CATEGORIES = [line.rstrip() for line in file]
-        logger.debug(CATEGORIES)
-
-    name = "Uses an invalid category"
-    recommendation = f"Set $category to a category in {categories_txt} or exclude the package in the linter"
+    name = "Doesn't use the function VM-Get-Category"
+    recommendation = "Set '$category = VM-Get-Category($MyInvocation.MyCommand.Definition)'"
 
     def check(self, path):
         if any([exclusion in str(path) for exclusion in self.EXCLUSIONS]):
@@ -361,8 +392,9 @@ class UsesInvalidCategory(Lint):
         # utf-8-sig ignores BOM
         file_content = open(path, "r", encoding="utf-8-sig").read()
 
-        match = re.search(r"\$category = ['\"](?P<category>[\w &/]+)['\"]", file_content)
-        if not match or match.group("category") not in self.CATEGORIES:
+        pattern = re.escape("$category = VM-Get-Category($MyInvocation.MyCommand.Definition)")
+        match = re.search(pattern, file_content)
+        if not match:
             return True
         return False
 
@@ -370,10 +402,10 @@ class UsesInvalidCategory(Lint):
 INSTALL_LINTS = (
     MissesImportCommonVm(),
     FirstLineDoesNotSetErrorAction(),
-    UsesInvalidCategory(),
+    UsesCategoryFromNuspec(),
 )
 
-UNINSTALL_LINTS = (UsesInvalidCategory(),)
+UNINSTALL_LINTS = (UsesCategoryFromNuspec(),)
 
 
 def lint_install(path):

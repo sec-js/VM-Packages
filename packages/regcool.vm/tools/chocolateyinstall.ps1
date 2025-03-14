@@ -2,9 +2,9 @@ $ErrorActionPreference = 'Stop'
 Import-Module vm.common -Force -DisableNameChecking
 
 $toolName = 'RegCool'
-$category = 'Registry'
+$category = VM-Get-Category($MyInvocation.MyCommand.Definition)
 
 $zipUrl = 'https://kurtzimmermann.com/files/RegCoolX64.zip'
-$zipSha256 = 'df3c80da807cab5b1612f0697373317523142643c4346ad618c3ec69d16db33e'
+$zipSha256 = '3a30a6c33e54860049eb67b0ef77538b1905f957bc29509dd850e33aa8138bea'
 
 VM-Install-From-Zip $toolName $category $zipUrl -zipSha256 $zipSha256 -consoleApp $false -innerFolder $false

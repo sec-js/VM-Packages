@@ -3,11 +3,11 @@ Import-Module vm.common -Force -DisableNameChecking
 
 try {
   $toolName = 'Windows Terminal'
-  $category = 'Productivity Tools'
+  $category = VM-Get-Category($MyInvocation.MyCommand.Definition)
   $executableName = "wt.exe"
 
-  $zipUrl = 'https://github.com/microsoft/terminal/releases/download/v1.21.3231.0/Microsoft.WindowsTerminal_1.21.3231.0_x64.zip'
-  $zipSha256 = '8fb268b93c9b99d6cf553709c2c58bf1b2ff4b364199152e09221dfb2a44bbf5'
+  $zipUrl = 'https://github.com/microsoft/terminal/releases/download/v1.22.10352.0/Microsoft.WindowsTerminal_1.22.10352.0_x64.zip'
+  $zipSha256 = 'c2cf549a567f60daf291dc87d06f69e74935426e96a5ed0f04845d8abe5504dd'
 
   $toolDir = Join-Path ${Env:RAW_TOOLS_DIR} $toolName
 
@@ -54,6 +54,9 @@ try {
   $label = "Open Terminal here"
   $icon = "$executablePath"
   VM-Add-To-Right-Click-Menu -menuKey $toolName -menuLabel $label -command $command -menuIcon $icon -type "directory" -background
+
+  # Refresh Desktop as shortcut is used in FLARE-VM LayoutModification.xml
+  VM-Refresh-Desktop
 } catch {
   VM-Write-Log-Exception $_
 }
