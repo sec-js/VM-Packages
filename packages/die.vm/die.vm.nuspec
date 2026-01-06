@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2015/06/nuspec.xsd">
   <metadata>
     <id>die.vm</id>
-    <version>3.10.20250505</version>
+    <version>3.10.20260106</version>
     <authors>Hellsp@wn, horsicq</authors>
     <description>DIE (Detect It Easy) is a tool for file type identification with signature-based and heuristic analysis.</description>
     <dependencies>
