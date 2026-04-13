@@ -94,28 +94,54 @@ jobs:
           git commit -am 'Add daily results'
           git push
 
-      - name: Get combined badge info
+      - name: Get Win10 badge info
+        id: win10
         run: |
-          pwd
-          $json = Get-Content -Raw "success_failure.json" | ConvertFrom-Json
-          $failure = $json.failure
-          $total = $json.total
-          $message = "$failure/$total"
-          # Celebrate that there are not failures
-          if (-not $failure) { $message += " 🎉" }
-          echo "failure=$failure" >> $env:GITHUB_ENV
-          echo "message=$message" >> $env:GITHUB_ENV
+          if (Test-Path "success_failure_Win10.json") {
+            $json = Get-Content -Raw "success_failure_Win10.json" | ConvertFrom-Json
+            $message = "$($json.failure)/$($json.total)"
+            if (-not $json.failure) { $message += " 🎉" }
+            echo "failure=$($json.failure)" >> $env:GITHUB_OUTPUT
+            echo "message=$message" >> $env:GITHUB_OUTPUT
+            echo "has_results=true" >> $env:GITHUB_OUTPUT
+          }
 
-      - name: Update dynamic badge gist
+      - name: Update Win10 badge
+        if: steps.win10.outputs.has_results == 'true'
         uses: schneegans/dynamic-badges-action@e9a478b16159b4d31420099ba146cdc50f134483 # v1.7.0
         with:
           auth: ${{ secrets.REPO_TOKEN }}
           gistID: 7d6b2592948d916eb5529350308f01d1
-          filename: ${{ matrix.os }}_daily_badge.svg
-          label: "failures ${{ matrix.os_name }}"
-          message: "${{ env.message }}"
-          # Use orange if only 1 package fails and red if more than 1 fail
+          filename: windows-2022_daily_badge.svg
+          label: "failures Win10"
+          message: "${{ steps.win10.outputs.message }}"
           maxColorRange: 1.25
           minColorRange: 0
           invertColorRange: true
-          valColorRange: ${{ env.failure }}
+          valColorRange: ${{ steps.win10.outputs.failure }}
+
+      - name: Get Win11 badge info
+        id: win11
+        run: |
+          if (Test-Path "success_failure_Win11.json") {
+            $json = Get-Content -Raw "success_failure_Win11.json" | ConvertFrom-Json
+            $message = "$($json.failure)/$($json.total)"
+            if (-not $json.failure) { $message += " 🎉" }
+            echo "failure=$($json.failure)" >> $env:GITHUB_OUTPUT
+            echo "message=$message" >> $env:GITHUB_OUTPUT
+            echo "has_results=true" >> $env:GITHUB_OUTPUT
+          }
+
+      - name: Update Win11 badge
+        if: steps.win11.outputs.has_results == 'true'
+        uses: schneegans/dynamic-badges-action@e9a478b16159b4d31420099ba146cdc50f134483 # v1.7.0
+        with:
+          auth: ${{ secrets.REPO_TOKEN }}
+          gistID: 7d6b2592948d916eb5529350308f01d1
+          filename: windows-2025_daily_badge.svg
+          label: "failures Win11"
+          message: "${{ steps.win11.outputs.message }}"
+          maxColorRange: 1.25
+          minColorRange: 0
+          invertColorRange: true
+          valColorRange: ${{ steps.win11.outputs.failure }}
