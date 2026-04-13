@@ -65,6 +65,17 @@ def main():
     with open(result_file, "w") as f:
         json.dump(final_result, f, indent=4)
 
+    # Write per-OS JSON files for badges
+    for os_alias, stats in os_results.items():
+        os_result = {
+            "success": stats["success"],
+            "failure": stats["failure"],
+            "total": stats["success"] + stats["failure"],
+            "failures": stats["failures"],
+        }
+        with open(f"success_failure_{os_alias}.json", "w") as f:
+            json.dump(os_result, f, indent=4)
+
     url = f"https://github.com/{os.environ.get('GITHUB_REPOSITORY')}"
     run_number = os.environ.get("GITHUB_RUN_NUMBER")
     run_id = os.environ.get("GITHUB_RUN_ID")
