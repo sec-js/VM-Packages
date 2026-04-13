@@ -66,6 +66,8 @@ jobs:
         id: test
         # It runs only if there are modified files
         if: steps.files.outputs.added_modified_renamed != ''
+        env:
+          MATRIX_OS: ${{ matrix.os }}
         run: |
           $os = "${{ matrix.os }}"
           $packages = "${{ steps.files.outputs.added_modified_renamed }}".Split(" ") | Foreach-Object { (Get-Item $_).Directory.Name }
