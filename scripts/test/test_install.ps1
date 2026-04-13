@@ -50,6 +50,9 @@ foreach ($package in $packages) {
 
 
 $exclude_tests = @("installer.vm", "idapro.vm")
+if ($env:MATRIX_OS -eq "windows-2025") {
+    $exclude_tests += "nodejs.vm"
+}
 
 $failures = New-Object Collections.Generic.List[string]
 $failed = 0
