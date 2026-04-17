@@ -8,7 +8,7 @@ try {
   # Download IDA .7z with the IDA installer and the FLARE-VM license
   $idaZipPath = Join-Path ${Env:TEMP} "ida_installer.7z"
   $idaZipSource = "https://hex-rays.com/hubfs/FlareVM/ida_installer.7z"
-  $idaZipChecksum = "d5e463cb13359707303442e16408351af7cff08f2b51ed12cacb7b5ddda0d165"
+  $idaZipChecksum = "9bf95862f33e9839d4fffbca8f9c864a832c2e9e0c747cd13e8b3df93e31c4f9"
   Get-ChocolateyWebFile -PackageName $toolName -fileFullPath $idaZipPath -Url $idaZipSource -Checksum $idaZipChecksum -ChecksumType "sha256"
   VM-Assert-Path $idaZipPath
 
@@ -16,22 +16,25 @@ try {
   $idaUnzippedDir = Join-Path ${Env:TEMP} $toolName
   7z x $idaZipPath -o"$idaUnzippedDir" -y -bd | Out-Null
 
-  $installerPath = Get-ChildItem -Path  "$idaUnzippedDir\ida-free-*.exe"
+  $installerPath = Get-ChildItem -Path  "$idaUnzippedDir\ida_installer\ida-free-*.exe"
   VM-Assert-Path $installerPath
 
+  # Use Chocolatey Install Package, but tell it to ignore the Exit Code 1 VCRedist failure
   $packageArgs = @{
-    packageName  = ${Env:ChocolateyPackageName}
-    fileType     = 'exe'
-    silentArgs   = '--mode unattended'
-    file         = $installerPath
+    packageName    = ${Env:ChocolateyPackageName}
+    fileType       = 'exe'
+    silentArgs     = '--mode unattended --unattendedmodeui none'
+    file           = $installerPath
+    validExitCodes = @(0, 1)
   }
-  Install-ChocolateyPackage @packageArgs
+  Install-ChocolateyInstallPackage @packageArgs
 
   # Wait for IDA to be installed
   Start-Sleep -Seconds 10
 
-  $toolDir = Get-ChildItem -Path "${Env:ProgramFiles}\IDA Free*" -Directory
-  $executablePath = Join-Path $toolDir "ida.exe" -Resolve
+  # Get the installation directory
+  $toolDir = Get-ChildItem -Path "${Env:ProgramFiles}\IDA Free*" -Directory | Select-Object -First 1
+  $executablePath = Join-Path $toolDir.FullName "ida.exe" -Resolve
 
   Install-BinFile -Name $toolname -Path $executablePath
 
@@ -48,13 +51,13 @@ try {
   VM-Assert-Path $launcherPath
 
   # Use ida_launcher.exe in the right click option "Open with IDA"
-  $icon = Join-Path $toolDir "ida.ico" -Resolve
+  $icon = Join-Path $toolDir.FullName "ida.ico" -Resolve
   VM-Add-To-Right-Click-Menu $launcherName 'Open with IDA' "`"$launcherPath`" `"%1`"" "$icon"
 
   # Create IDA user directory and copy flare-vm@google.com license
   $idaDir = "${Env:APPDATA}\Hex-Rays\IDA Pro"
   New-Item $idaDir -ItemType "directory" -Force | Out-Null
-  $licensePath = Get-ChildItem -Path "$idaUnzippedDir\idafree_9*.hexlic"
+  $licensePath = Get-ChildItem -Path "$idaUnzippedDir\ida_installer\idafree_9*.hexlic"
   Copy-Item $licensePath $idaDir
 
   # Refresh Desktop as shortcut is used in FLARE-VM LayoutModification.xml
